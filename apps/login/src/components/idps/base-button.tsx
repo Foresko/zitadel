@@ -11,6 +11,7 @@ export type SignInWithIdentityProviderProps = DetailedHTMLProps<
   HTMLButtonElement
 > & {
   name?: string;
+  logoUrl?: string;
   e2e?: string;
 };
 

@@ -103,6 +103,9 @@ declare namespace NodeJS {
      */
     CSP_FETCH_ENABLED?: string;
 
+    /** Optional absolute path to the strict runtime IDP logo registry. If unset, no logo overrides are applied. */
+    IDP_LOGOS_FILE?: string;
+
     /**
      * Optional: Disable OpenTelemetry instrumentation.
      * Set to "true" to bypass OTEL initialization.

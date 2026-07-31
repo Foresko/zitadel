@@ -31,6 +31,22 @@ let _loggerProvider: LoggerProvider | null = null;
 export async function register(): Promise<void> {
   // Only run OpenTelemetry in the Node.js environment
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    const [{ getIdpLogos }, { createLogger }] = await Promise.all([
+      import("./lib/server/idp-logos"),
+      import("./lib/logger"),
+    ]);
+
+    // Next.js reports instrumentation errors but can keep the server alive, so
+    // invalid operator configuration must terminate the process explicitly.
+    try {
+      getIdpLogos();
+    } catch (error) {
+      createLogger("startup").error("IDP logo configuration is invalid", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      process.exit(1);
+    }
+
     // Disable by default in local development to avoid unnecessary overhead
     if (process.env.NODE_ENV === "development" && process.env.OTEL_SDK_DISABLED !== "false") {
       return;

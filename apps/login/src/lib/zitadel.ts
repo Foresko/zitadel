@@ -108,13 +108,13 @@ export async function getHostedLoginTranslation({
         {
           level: organization
             ? {
-                case: "organizationId",
-                value: organization,
-              }
+              case: "organizationId",
+              value: organization,
+            }
             : {
-                case: "instance",
-                value: true,
-              },
+              case: "instance",
+              value: true,
+            },
           locale: locale,
         },
         {},
@@ -862,10 +862,10 @@ export async function getDefaultOrg({ serviceConfig }: WithServiceConfig): Promi
 
   return useCache
     ? freshCache(
-        instanceCacheKey(serviceConfig, "getDefaultOrg-instance"),
-        fetcher,
-        getTTLForKey("getDefaultOrg", defaultCacheTTL),
-      )
+      instanceCacheKey(serviceConfig, "getDefaultOrg-instance"),
+      fetcher,
+      getTTLForKey("getDefaultOrg", defaultCacheTTL),
+    )
     : fetcher();
 }
 
@@ -986,13 +986,13 @@ export async function authorizeOrDenyDeviceAuthorization({
     deviceAuthorizationId,
     decision: session
       ? {
-          case: "session",
-          value: session,
-        }
+        case: "session",
+        value: session,
+      }
       : {
-          case: "deny",
-          value: {},
-        },
+        case: "deny",
+        value: {},
+      },
   });
 }
 

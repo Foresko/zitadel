@@ -1,6 +1,18 @@
 import { IDPType } from "@zitadel/proto/zitadel/idp/v2/idp_pb";
 import { IdentityProviderType } from "@zitadel/proto/zitadel/settings/v2/login_settings_pb";
 
+const GENERIC_IDP_PROVIDER_TYPES = new Set<IdentityProviderType>([
+  IdentityProviderType.OAUTH,
+  IdentityProviderType.OIDC,
+  IdentityProviderType.SAML,
+  IdentityProviderType.LDAP,
+  IdentityProviderType.JWT,
+]);
+
+export function isGenericIdpProviderType(type: IdentityProviderType): boolean {
+  return GENERIC_IDP_PROVIDER_TYPES.has(type);
+}
+
 // This maps the IdentityProviderType to a slug which is used in the /success and /failure routes
 export function idpTypeToSlug(idpType: IdentityProviderType) {
   switch (idpType) {

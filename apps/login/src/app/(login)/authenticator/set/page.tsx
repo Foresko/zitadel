@@ -6,6 +6,7 @@ import { SignInWithIdp } from "@/components/sign-in-with-idp";
 import { Translated } from "@/components/translated";
 import { UserAvatar } from "@/components/user-avatar";
 import { getSessionCookieById } from "@/lib/cookies";
+import { getGenericIdpLogos } from "@/lib/server/idp-logos";
 import { getServiceConfig } from "@/lib/service-url";
 import { loadMostRecentSession } from "@/lib/session";
 import { checkUserVerification } from "@/lib/verify-helper";
@@ -127,6 +128,8 @@ export default async function Page(props: { searchParams: Promise<Record<string 
     orgId: sessionWithData.factors?.user?.organizationId,
     linking_allowed: true,
   });
+  const genericIdentityProviderLogos =
+    loginSettings?.allowExternalIdp && identityProviders.length ? getGenericIdpLogos(identityProviders) : {};
 
   const params = new URLSearchParams({
     initial: "true", // defines that a code is not required and is therefore not shown in the UI
@@ -183,6 +186,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
             <SignInWithIdp
               showLabel={false}
               identityProviders={identityProviders}
+              genericIdentityProviderLogos={genericIdentityProviderLogos}
               requestId={requestId}
               organization={sessionWithData.factors?.user?.organizationId}
               sessionId={sessionWithData.id} // tell the callback function to link the IDP

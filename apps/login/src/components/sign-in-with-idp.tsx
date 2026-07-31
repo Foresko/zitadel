@@ -1,8 +1,9 @@
 "use client";
 
-import { idpTypeToSlug } from "@/lib/idp";
+import { idpTypeToSlug, isGenericIdpProviderType } from "@/lib/idp";
+import { type IdpLogo } from "@/lib/idp-logo";
 import { redirectToIdp } from "@/lib/server/idp";
-import { IdentityProvider, IdentityProviderType } from "@zitadel/proto/zitadel/settings/v2/login_settings_pb";
+import { IdentityProviderType, type IdentityProvider } from "@zitadel/proto/zitadel/settings/v2/login_settings_pb";
 import { ReactNode, useActionState } from "react";
 import { Alert } from "./alert";
 import { AutoSubmitForm } from "./auto-submit-form";
@@ -18,6 +19,7 @@ import { Translated } from "./translated";
 export interface SignInWithIDPProps {
   children?: ReactNode;
   identityProviders: IdentityProvider[];
+  genericIdentityProviderLogos: Record<string, IdpLogo>;
   requestId?: string;
   organization?: string;
   sessionId?: string;
@@ -27,6 +29,7 @@ export interface SignInWithIDPProps {
 
 export function SignInWithIdp({
   identityProviders,
+  genericIdentityProviderLogos,
   requestId,
   organization,
   sessionId,
@@ -37,6 +40,7 @@ export function SignInWithIdp({
 
   const renderIDPButton = (idp: IdentityProvider, index: number) => {
     const { id, name, type } = idp;
+    const logoUrl = isGenericIdpProviderType(type) ? genericIdentityProviderLogos[id]?.url : undefined;
 
     const components: Partial<Record<IdentityProviderType, (props: SignInWithIdentityProviderProps) => ReactNode>> = {
       [IdentityProviderType.APPLE]: SignInWithApple,
@@ -62,7 +66,7 @@ export function SignInWithIdp({
         <input type="hidden" name="organization" value={organization} />
         {sessionId && <input type="hidden" name="sessionId" value={sessionId} />}
         {postErrorRedirectUrl && <input type="hidden" name="postErrorRedirectUrl" value={postErrorRedirectUrl} />}
-        <Component key={id} name={name} />
+        <Component {...(isGenericIdpProviderType(type) ? { name, logoUrl } : { name })} />
       </form>
     ) : null;
   };

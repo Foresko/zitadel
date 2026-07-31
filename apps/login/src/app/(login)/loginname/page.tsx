@@ -2,6 +2,7 @@ import { DynamicTheme } from "@/components/dynamic-theme";
 import { SignInWithIdp } from "@/components/sign-in-with-idp";
 import { Translated } from "@/components/translated";
 import { UsernameForm } from "@/components/username-form";
+import { getGenericIdpLogos } from "@/lib/server/idp-logos";
 import { getServiceConfig } from "@/lib/service-url";
 import { getActiveIdentityProviders, getBrandingSettings, getDefaultOrg, getLoginSettings } from "@/lib/zitadel";
 import { Organization } from "@zitadel/proto/zitadel/org/v2/org_pb";
@@ -42,6 +43,8 @@ export default async function Page(props: { searchParams: Promise<Record<string 
   }).then((resp) => {
     return resp.identityProviders;
   });
+  const genericIdentityProviderLogos =
+    loginSettings?.allowExternalIdp && identityProviders.length ? getGenericIdpLogos(identityProviders) : {};
 
   const branding = await getBrandingSettings({ serviceConfig, organization: organization ?? defaultOrganization });
 
@@ -75,6 +78,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
           <div className="w-full pt-6 pb-4">
             <SignInWithIdp
               identityProviders={identityProviders}
+              genericIdentityProviderLogos={genericIdentityProviderLogos}
               requestId={requestId}
               organization={organization}
               postErrorRedirectUrl="/loginname"

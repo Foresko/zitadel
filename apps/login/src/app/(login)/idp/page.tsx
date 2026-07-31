@@ -1,6 +1,7 @@
 import { DynamicTheme } from "@/components/dynamic-theme";
 import { SignInWithIdp } from "@/components/sign-in-with-idp";
 import { Translated } from "@/components/translated";
+import { getGenericIdpLogos } from "@/lib/server/idp-logos";
 import { getServiceConfig } from "@/lib/service-url";
 import { getActiveIdentityProviders, getBrandingSettings } from "@/lib/zitadel";
 import { Metadata } from "next";
@@ -24,6 +25,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
   const identityProviders = await getActiveIdentityProviders({ serviceConfig, orgId: organization }).then((resp) => {
     return resp.identityProviders;
   });
+  const genericIdentityProviderLogos = identityProviders.length ? getGenericIdpLogos(identityProviders) : {};
 
   const branding = await getBrandingSettings({ serviceConfig, organization });
 
@@ -42,6 +44,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
         {!!identityProviders?.length && (
           <SignInWithIdp
             identityProviders={identityProviders}
+            genericIdentityProviderLogos={genericIdentityProviderLogos}
             requestId={requestId}
             organization={organization}
             postErrorRedirectUrl="/idp"
