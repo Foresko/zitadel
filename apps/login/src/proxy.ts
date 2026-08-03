@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildCSP } from "./lib/csp";
 import { applyCustomHeaders } from "./lib/custom-headers";
 import { createLogger } from "./lib/logger";
+import { COUNTRY_CODE_HEADER, resolveCountry } from "./lib/server/country";
 import { getIframeOrigins } from "./lib/server/security-settings";
 import { getServiceConfig } from "./lib/service-url";
 
@@ -64,6 +65,12 @@ export async function proxy(request: NextRequest) {
   const isMatched = proxyPaths.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
 
   if (!isMatched) {
+    const country = await resolveCountry(request.headers.get("x-real-ip"));
+    if (country) {
+      requestHeaders.set(COUNTRY_CODE_HEADER, country);
+    } else {
+      requestHeaders.delete(COUNTRY_CODE_HEADER);
+    }
     return NextResponse.next({
       request: { headers: requestHeaders },
       headers: responseHeaders,

@@ -17,7 +17,9 @@ import { getOrSetFingerprintId } from "../fingerprint";
 import { getServiceConfig } from "../service-url";
 import { checkEmailVerification, checkMFAFactors } from "../verify-helper";
 import { createSessionForIdpAndUpdateCookie } from "./cookie";
+import { getCountryCode } from "./country";
 import { getPublicHost } from "./host";
+import { getIdpPolicy, isIdentityProviderAllowed } from "./idp-policy";
 
 export type RedirectToIdpState =
   | { error?: string | null; samlData?: { url: string; fields: Record<string, string> } }
@@ -36,6 +38,11 @@ export async function redirectToIdp(prevState: RedirectToIdpState, formData: For
   const idpId = formData.get("id") as string;
   const provider = formData.get("provider") as string;
   const postErrorRedirectUrl = formData.get("postErrorRedirectUrl") as string;
+  const country = getCountryCode(_headers);
+
+  if (!isIdentityProviderAllowed(getIdpPolicy(country), idpId)) {
+    return { error: "Identity provider is not available" };
+  }
 
   if (sessionId) {
     try {

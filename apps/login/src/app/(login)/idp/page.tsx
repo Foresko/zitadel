@@ -2,6 +2,7 @@ import { DynamicTheme } from "@/components/dynamic-theme";
 import { SignInWithIdp } from "@/components/sign-in-with-idp";
 import { Translated } from "@/components/translated";
 import { getGenericIdpLogos } from "@/lib/server/idp-logos";
+import { getCountryCode } from "@/lib/server/country";
 import { getServiceConfig } from "@/lib/service-url";
 import { getActiveIdentityProviders, getBrandingSettings } from "@/lib/zitadel";
 import { Metadata } from "next";
@@ -21,10 +22,9 @@ export default async function Page(props: { searchParams: Promise<Record<string 
 
   const _headers = await headers();
   const { serviceConfig } = getServiceConfig(_headers);
+  const country = getCountryCode(_headers);
 
-  const identityProviders = await getActiveIdentityProviders({ serviceConfig, orgId: organization }).then((resp) => {
-    return resp.identityProviders;
-  });
+  const { identityProviders } = await getActiveIdentityProviders({ serviceConfig, orgId: organization, country });
   const genericIdentityProviderLogos = identityProviders.length ? getGenericIdpLogos(identityProviders) : {};
 
   const branding = await getBrandingSettings({ serviceConfig, organization });

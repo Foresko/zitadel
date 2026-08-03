@@ -42,6 +42,7 @@
     "copy-to-clipboard": "^3.3.3",
     "deepmerge": "^4.3.1",
     "escape-html": "^1.0.3",
+    "ip-location-api": "5.0.2",
     "lru-cache": "^11.3.6",
     "lucide-react": "^0.577.0",
     "moment": "^2.30.1",

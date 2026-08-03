@@ -7,6 +7,7 @@ import { Translated } from "@/components/translated";
 import { UserAvatar } from "@/components/user-avatar";
 import { getSessionCookieById } from "@/lib/cookies";
 import { getGenericIdpLogos } from "@/lib/server/idp-logos";
+import { getCountryCode } from "@/lib/server/country";
 import { getServiceConfig } from "@/lib/service-url";
 import { loadMostRecentSession } from "@/lib/session";
 import { checkUserVerification } from "@/lib/verify-helper";
@@ -37,6 +38,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
 
   const _headers = await headers();
   const { serviceConfig } = getServiceConfig(_headers);
+  const country = getCountryCode(_headers);
 
   const sessionWithData = sessionId
     ? await loadSessionById(sessionId, organization)
@@ -127,6 +129,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
     serviceConfig,
     orgId: sessionWithData.factors?.user?.organizationId,
     linking_allowed: true,
+    country,
   });
   const genericIdentityProviderLogos =
     loginSettings?.allowExternalIdp && identityProviders.length ? getGenericIdpLogos(identityProviders) : {};

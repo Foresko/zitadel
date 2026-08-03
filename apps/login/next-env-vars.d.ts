@@ -103,8 +103,20 @@ declare namespace NodeJS {
      */
     CSP_FETCH_ENABLED?: string;
 
+    /** Optional absolute path to runtime country-specific IDP access policies. If unset, all IDPs are allowed. */
+    IDP_POLICY_FILE?: string;
+
     /** Optional absolute path to the strict runtime IDP logo registry. If unset, no logo overrides are applied. */
     IDP_LOGOS_FILE?: string;
+
+    /** Persistent directory containing the generated IP country database. */
+    ILA_DATA_DIR?: string;
+
+    /** Writable temporary directory used while updating the IP country database. */
+    ILA_TMP_DATA_DIR?: string;
+
+    /** UTC cron expression used by ip-location-api for database updates. */
+    ILA_AUTO_UPDATE?: string;
 
     /**
      * Optional: Disable OpenTelemetry instrumentation.

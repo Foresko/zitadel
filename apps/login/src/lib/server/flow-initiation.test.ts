@@ -1,3 +1,4 @@
+import { IdentityProviderType } from "@zitadel/proto/zitadel/settings/v2/login_settings_pb";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { FlowInitiationParams, handleOIDCFlowInitiation } from "./flow-initiation";
@@ -30,8 +31,8 @@ vi.mock("@/lib/session", () => ({
 vi.mock("@/lib/zitadel", () => ({
   createCallback: vi.fn(),
   createResponse: vi.fn(),
-  getActiveIdentityProviders: vi.fn(),
   getAuthRequest: vi.fn(),
+  getActiveIdentityProviders: vi.fn(),
   getOrgsByDomain: vi.fn(),
   getSAMLRequest: vi.fn(),
   getSecuritySettings: vi.fn(),
@@ -46,8 +47,8 @@ vi.mock("escape-html", () => ({
   default: (s: string) => s,
 }));
 
-function makeRequest(url = "https://example.com/login?requestId=oidc_abc123"): NextRequest {
-  return new NextRequest(url);
+function makeRequest(url = "https://example.com/login?requestId=oidc_abc123", headers?: HeadersInit): NextRequest {
+  return new NextRequest(url, { headers });
 }
 
 function makeBaseParams(overrides?: Partial<FlowInitiationParams>): FlowInitiationParams {
@@ -60,6 +61,57 @@ function makeBaseParams(overrides?: Partial<FlowInitiationParams>): FlowInitiati
     ...overrides,
   };
 }
+
+describe("handleOIDCFlowInitiation — country policy forced IDP enforcement", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const zitadel = await import("@/lib/zitadel");
+    const serviceUrl = await import("@/lib/service-url");
+    const authUtils = await import("@/lib/auth-utils");
+    const idp = await import("@/lib/idp");
+
+    vi.mocked(authUtils.getValidLocaleFromUILocales).mockReturnValue(null);
+    vi.mocked(zitadel.getAuthRequest).mockResolvedValue({
+      authRequest: {
+        id: "abc123",
+        uiLocales: [],
+        scope: ["openid", "urn:zitadel:iam:org:idp:id:google-id"],
+        prompt: [],
+      },
+    } as any);
+    vi.mocked(zitadel.getActiveIdentityProviders).mockResolvedValue({
+      identityProviders: [{ id: "google-id", type: IdentityProviderType.OIDC }],
+    } as any);
+    vi.mocked(zitadel.startIdentityProviderFlow).mockResolvedValue({ url: "https://idp.example.com/auth" } as any);
+    vi.mocked(serviceUrl.constructUrl).mockImplementation(
+      (_request: NextRequest, path: string) => new URL(path, "https://example.com"),
+    );
+    vi.mocked(idp.idpTypeToSlug).mockReturnValue("oidc");
+  });
+
+  test("falls back to normal login for a disallowed forced provider", async () => {
+    const zitadel = await import("@/lib/zitadel");
+    vi.mocked(zitadel.getActiveIdentityProviders).mockResolvedValue({ identityProviders: [] } as any);
+
+    const response = await handleOIDCFlowInitiation(
+      makeBaseParams({ request: makeRequest(undefined, { "x-zitadel-country": "US" }) }),
+    );
+
+    expect(response.headers.get("location")).toBe("https://example.com/loginname?requestId=oidc_abc123");
+    expect(zitadel.startIdentityProviderFlow).not.toHaveBeenCalled();
+  });
+
+  test("retains forced provider behavior when the provider is allowed", async () => {
+    const zitadel = await import("@/lib/zitadel");
+
+    const response = await handleOIDCFlowInitiation(
+      makeBaseParams({ request: makeRequest(undefined, { "x-zitadel-country": "US" }) }),
+    );
+
+    expect(response.headers.get("location")).toBe("https://idp.example.com/auth");
+    expect(zitadel.startIdentityProviderFlow).toHaveBeenCalledOnce();
+  });
+});
 
 describe("handleOIDCFlowInitiation — locale / cookie handling", () => {
   let mockGetLanguageCookie: ReturnType<typeof vi.fn>;

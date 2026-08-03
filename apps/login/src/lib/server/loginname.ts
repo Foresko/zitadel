@@ -25,7 +25,9 @@ import {
   startIdentityProviderFlow,
 } from "../zitadel";
 import { createSessionAndUpdateCookie } from "./cookie";
+import { getCountryCode } from "./country";
 import { getPublicHost } from "./host";
+import { getIdpPolicy, isIdentityProviderAllowed } from "./idp-policy";
 import { trySendVerification } from "./verify";
 
 const logger = createLogger("loginname");
@@ -44,6 +46,8 @@ const ORG_SUFFIX_REGEX = /(?<=@)(.+)/;
 export async function sendLoginname(command: SendLoginnameCommand) {
   const _headers = await headers();
   const { serviceConfig } = getServiceConfig(_headers);
+  const country = getCountryCode(_headers);
+  const idpPolicy = getIdpPolicy(country);
 
   const t = await getTranslations("loginname");
 
@@ -111,16 +115,18 @@ export async function sendLoginname(command: SendLoginnameCommand) {
 
   const redirectUserToIDP = async (userId?: string, organization?: string) => {
     // If userId is provided, check for user-specific IDP links first
-    let identityProviders: IDPLink[] = [];
+
+    let allowedIdentityProviders: IDPLink[] = [];
     if (userId) {
-      identityProviders = await listIDPLinks({ serviceConfig, userId }).then((resp) => {
+      const identityProviders = await listIDPLinks({ serviceConfig, userId }).then((resp) => {
         return resp.result;
       });
+      allowedIdentityProviders = identityProviders.filter((idp) => isIdentityProviderAllowed(idpPolicy, idp.idpId));
     }
 
     // If no IDP links exist for the user (or no userId provided), try to get active IDPs from the organization
-    if (identityProviders.length === 0) {
-      const activeIdps = await getActiveIdentityProviders({ serviceConfig, orgId: organization }).then((resp) => {
+    if (allowedIdentityProviders.length === 0) {
+      const activeIdps = await getActiveIdentityProviders({ serviceConfig, orgId: organization, country }).then((resp) => {
         return resp.identityProviders.filter((idp) => idp.options?.isAutoCreation || idp.options?.isCreationAllowed);
       });
 
@@ -174,12 +180,12 @@ export async function sendLoginname(command: SendLoginnameCommand) {
       }
     }
 
-    if (identityProviders.length === 1) {
+    if (allowedIdentityProviders.length === 1) {
       const _headers = await headers();
       const { serviceConfig } = getServiceConfig(_headers);
       const host = getPublicHost(_headers);
 
-      const identityProviderId = identityProviders[0].idpId;
+      const identityProviderId = allowedIdentityProviders[0].idpId;
 
       const idp = await getIDPByID({ serviceConfig, id: identityProviderId });
 
@@ -347,10 +353,10 @@ export async function sendLoginname(command: SendLoginnameCommand) {
 
       const codeSent = shouldSend
         ? await trySendVerification({
-            userId: session?.factors?.user?.id ?? user.userId,
-            isInvite: true,
-            requestId: command.requestId,
-          })
+          userId: session?.factors?.user?.id ?? user.userId,
+          isInvite: true,
+          requestId: command.requestId,
+        })
         : false;
 
       const params = new URLSearchParams({
@@ -443,11 +449,9 @@ export async function sendLoginname(command: SendLoginnameCommand) {
         case AuthenticationMethodType.IDP: {
           const resp = await redirectUserToIDP(userId, organization);
 
-          if (resp?.error) {
-            return { error: resp.error };
+          if (resp) {
+            return resp;
           }
-
-          return resp;
         }
       }
     } else {
@@ -473,9 +477,15 @@ export async function sendLoginname(command: SendLoginnameCommand) {
         }
 
         return { redirect: "/passkey?" + passkeyParams };
-      } else if (methods.authMethodTypes.includes(AuthenticationMethodType.IDP)) {
-        return redirectUserToIDP(userId, organization);
-      } else if (methods.authMethodTypes.includes(AuthenticationMethodType.PASSWORD)) {
+      }
+      if (methods.authMethodTypes.includes(AuthenticationMethodType.IDP)) {
+        const idpResp = await redirectUserToIDP(userId, organization);
+
+        if (idpResp) {
+          return idpResp;
+        }
+      }
+      if (methods.authMethodTypes.includes(AuthenticationMethodType.PASSWORD)) {
         // Check if password authentication is allowed
         if (!userLoginSettings?.allowLocalAuthentication) {
           if (command.ignoreUnknownUsernames) {

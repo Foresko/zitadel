@@ -1,5 +1,6 @@
+import { IdentityProviderType } from "@zitadel/proto/zitadel/settings/v2/login_settings_pb";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { redirectToIdp } from "./idp";
+import { createNewSessionForLDAP, redirectToIdp } from "./idp";
 
 // Mock all the dependencies
 vi.mock("next/headers", () => ({
@@ -26,12 +27,19 @@ vi.mock("./host", () => ({
 }));
 
 vi.mock("../zitadel", () => ({
+  getActiveIdentityProviders: vi.fn(),
   startIdentityProviderFlow: vi.fn(),
+  startLDAPIdentityProviderFlow: vi.fn(),
 }));
 
 vi.mock("../fingerprint", () => ({
   getFingerprintIdCookie: vi.fn(),
   getOrSetFingerprintId: vi.fn(),
+}));
+
+vi.mock("./idp-policy", () => ({
+  getIdpPolicy: vi.fn(),
+  isIdentityProviderAllowed: vi.fn(),
 }));
 
 describe("redirectToIdp", () => {
@@ -40,6 +48,10 @@ describe("redirectToIdp", () => {
   let mockGetInstanceHost: any;
   let mockGetPublicHost: any;
   let mockStartIdentityProviderFlow: any;
+  let mockStartLDAPIdentityProviderFlow: any;
+  let mockGetActiveIdentityProviders: any;
+  let mockGetIdpPolicy: any;
+  let mockIsIdentityProviderAllowed: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -48,9 +60,11 @@ describe("redirectToIdp", () => {
     const { headers } = await import("next/headers");
     const { getServiceConfig } = await import("../service-url");
     const { getInstanceHost, getPublicHost } = await import("./host");
-    const { startIdentityProviderFlow } = await import("../zitadel");
+    const { getActiveIdentityProviders, startIdentityProviderFlow, startLDAPIdentityProviderFlow } =
+      await import("../zitadel");
     const { getFingerprintIdCookie, getOrSetFingerprintId } = await import("../fingerprint");
     const { getSessionCookieById } = await import("@/lib/cookies");
+    const { getIdpPolicy, isIdentityProviderAllowed } = await import("./idp-policy");
 
     // Setup mocks
     mockHeaders = vi.mocked(headers);
@@ -58,6 +72,10 @@ describe("redirectToIdp", () => {
     mockGetInstanceHost = vi.mocked(getInstanceHost);
     mockGetPublicHost = vi.mocked(getPublicHost);
     mockStartIdentityProviderFlow = vi.mocked(startIdentityProviderFlow);
+    mockStartLDAPIdentityProviderFlow = vi.mocked(startLDAPIdentityProviderFlow);
+    mockGetActiveIdentityProviders = vi.mocked(getActiveIdentityProviders);
+    mockGetIdpPolicy = vi.mocked(getIdpPolicy);
+    mockIsIdentityProviderAllowed = vi.mocked(isIdentityProviderAllowed);
     const mockGetFingerprintIdCookie = vi.mocked(getFingerprintIdCookie);
     const mockGetOrSetFingerprintId = vi.mocked(getOrSetFingerprintId);
     const mockGetSessionCookieById = vi.mocked(getSessionCookieById);
@@ -66,12 +84,21 @@ describe("redirectToIdp", () => {
     mockGetFingerprintIdCookie.mockResolvedValue({ name: "fingerprintId", value: "fp123" });
     mockGetOrSetFingerprintId.mockResolvedValue("fp123");
     mockGetSessionCookieById.mockResolvedValue({} as any);
-    mockHeaders.mockResolvedValue({} as any);
+    mockGetIdpPolicy.mockReturnValue(undefined);
+    mockIsIdentityProviderAllowed.mockReturnValue(true);
+    mockHeaders.mockResolvedValue(new Headers() as any);
     mockGetServiceUrlFromHeaders.mockReturnValue({
       serviceConfig: { baseUrl: "https://api.example.com" },
     });
     mockGetInstanceHost.mockReturnValue("example.com");
     mockGetPublicHost.mockReturnValue("example.com");
+    mockGetActiveIdentityProviders.mockResolvedValue({
+      identityProviders: [
+        { id: "idp123", type: IdentityProviderType.OIDC },
+        { id: "google-id", type: IdentityProviderType.OIDC },
+        { id: "ldap123", type: IdentityProviderType.LDAP },
+      ],
+    });
   });
 
   afterEach(() => {
@@ -270,6 +297,42 @@ describe("redirectToIdp", () => {
   });
 
   describe("General redirect behavior", () => {
+    test("rejects a disallowed provider before loading active providers", async () => {
+      mockHeaders.mockResolvedValue(new Headers({ "x-zitadel-country": "US" }) as any);
+      mockIsIdentityProviderAllowed.mockReturnValue(false);
+      const formData = new FormData();
+      formData.append("id", "google-id");
+      formData.append("provider", "ldap");
+
+      await expect(redirectToIdp(undefined, formData)).resolves.toEqual({
+        error: "Identity provider is not available",
+      });
+      expect(mockStartIdentityProviderFlow).not.toHaveBeenCalled();
+      expect(mockGetActiveIdentityProviders).not.toHaveBeenCalled();
+      expect(mockGetIdpPolicy).toHaveBeenCalledWith("US");
+      expect(mockIsIdentityProviderAllowed).toHaveBeenCalledWith(undefined, "google-id");
+    });
+
+    test("starts a direct LDAP action in the US even when the policy allowlist is empty", async () => {
+      mockHeaders.mockResolvedValue(new Headers({ "x-zitadel-country": "US" }) as any);
+      mockStartLDAPIdentityProviderFlow.mockResolvedValue(undefined);
+
+      await expect(
+        createNewSessionForLDAP({
+          username: "user",
+          password: "password",
+          idpId: "ldap-id",
+          link: false,
+        }),
+      ).resolves.toEqual({ error: "Could not start LDAP identity provider flow" });
+      expect(mockStartLDAPIdentityProviderFlow).toHaveBeenCalledWith({
+        serviceConfig: { baseUrl: "https://api.example.com" },
+        idpId: "ldap-id",
+        username: "user",
+        password: "password",
+      });
+    });
+
     test("should return error when IDP flow returns null", async () => {
       const formData = new FormData();
       formData.append("id", "idp123");

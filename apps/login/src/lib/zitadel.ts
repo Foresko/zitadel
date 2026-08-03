@@ -38,6 +38,7 @@ import { errorClassificationInterceptor, isClassifiedError } from "@/lib/grpc/in
 import { otelGrpcInterceptor } from "@/lib/grpc/interceptors/otel";
 import { Code, Interceptor } from "@connectrpc/connect";
 import { PromiseCache } from "./cache";
+import { getIdpPolicy, isIdentityProviderAllowed } from "./server/idp-policy";
 import { createServiceForHost } from "./service";
 
 const useCache = process.env.API_CACHE_ENABLED !== "false";
@@ -1263,9 +1264,11 @@ export async function getActiveIdentityProviders({
   serviceConfig,
   orgId,
   linking_allowed,
+  country,
 }: WithServiceConfig<{
   orgId?: string;
   linking_allowed?: boolean;
+  country?: string;
 }>) {
   const props: any = { ctx: makeReqCtx(orgId) };
   if (linking_allowed) {
@@ -1273,7 +1276,15 @@ export async function getActiveIdentityProviders({
   }
   const settingsService: Client<typeof SettingsService> = await createServiceForHost(SettingsService, serviceConfig);
 
-  return settingsService.getActiveIdentityProviders(props, {});
+  const response = await settingsService.getActiveIdentityProviders(props, {});
+  const policy = getIdpPolicy(country);
+
+  return {
+    ...response,
+    identityProviders: policy
+      ? response.identityProviders.filter(({ id }) => isIdentityProviderAllowed(policy, id))
+      : response.identityProviders,
+  };
 }
 
 /**

@@ -2,7 +2,6 @@ import { PasskeysType } from "@zitadel/proto/zitadel/settings/v2/login_settings_
 import { UserState } from "@zitadel/proto/zitadel/user/v2/user_pb";
 import { AuthenticationMethodType } from "@zitadel/proto/zitadel/user/v2/user_service_pb";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { getIDPByID } from "../zitadel";
 import { sendLoginname } from "./loginname";
 
 // Mock all the dependencies
@@ -47,6 +46,10 @@ vi.mock("./verify", () => ({
   trySendVerification: vi.fn(() => Promise.resolve(false)),
 }));
 
+vi.mock("./country", () => ({
+  getCountryCode: vi.fn(() => "US"),
+}));
+
 // this returns the key itself that can be checked not the translated value
 vi.mock("next-intl/server", () => ({
   getTranslations: vi.fn(() => (key: string) => key),
@@ -79,16 +82,17 @@ describe("sendLoginname", () => {
     const { getServiceConfig } = await import("../service-url");
     const {
       getLoginSettings,
+      getActiveIdentityProviders,
+      getIDPByID,
       searchUsers,
       listAuthenticationMethodTypes,
       listIDPLinks,
       startIdentityProviderFlow,
-      getActiveIdentityProviders,
       getOrgsByDomain,
     } = await import("../zitadel");
     const { createSessionAndUpdateCookie } = await import("./cookie");
     const { getInstanceHost, getPublicHost } = await import("./host");
-    const { idpTypeToSlug } = await import("../idp");
+    const { idpTypeToIdentityProviderType, idpTypeToSlug } = await import("../idp");
 
     // Setup mocks
     mockHeaders = vi.mocked(headers);
@@ -113,6 +117,7 @@ describe("sendLoginname", () => {
     mockGetInstanceHost.mockReturnValue("example.com");
     mockGetPublicHost.mockReturnValue("example.com");
     mockIdpTypeToSlug.mockReturnValue("google");
+    vi.mocked(idpTypeToIdentityProviderType).mockReturnValue(0);
     mockGetIDPByID.mockResolvedValue({
       id: "idp123",
       name: "Google",
@@ -120,8 +125,10 @@ describe("sendLoginname", () => {
     });
     // Default: org discovery returns empty result
     mockGetOrgsByDomain.mockResolvedValue({ result: [] });
-    // Default: no active identity providers
-    mockGetActiveIdentityProviders.mockResolvedValue({ identityProviders: [] });
+    // Default: the linked provider is active and allowed
+    mockGetActiveIdentityProviders.mockResolvedValue({
+      identityProviders: [{ id: "idp123", type: 0 }],
+    });
   });
 
   afterEach(() => {
@@ -277,6 +284,10 @@ describe("sendLoginname", () => {
           serviceConfig: { baseUrl: "https://api.example.com" },
           userId: "user123",
         });
+        expect(mockGetIDPByID).toHaveBeenCalledWith({
+          serviceConfig: { baseUrl: "https://api.example.com" },
+          id: "idp123",
+        });
       });
 
       test("should return error when password not allowed and no IDP links available", async () => {
@@ -316,7 +327,22 @@ describe("sendLoginname", () => {
         expect(mockGetActiveIdentityProviders).toHaveBeenCalledWith({
           serviceConfig: { baseUrl: "https://api.example.com" },
           orgId: "org123", // User's organization from resourceOwner
+          country: "US",
         });
+      });
+
+      test("does not auto-redirect a disallowed organization IDP", async () => {
+        mockGetLoginSettings.mockResolvedValue({ allowLocalAuthentication: false });
+        mockListAuthenticationMethodTypes.mockResolvedValue({
+          authMethodTypes: [AuthenticationMethodType.PASSWORD],
+        });
+        mockListIDPLinks.mockResolvedValue({ result: [] });
+        mockGetActiveIdentityProviders.mockResolvedValue({ identityProviders: [] });
+
+        const result = await sendLoginname({ loginName: "user@example.com" });
+
+        expect(result).toEqual({ error: "errors.localAuthenticationNotAllowed" });
+        expect(mockStartIdentityProviderFlow).not.toHaveBeenCalled();
       });
 
       test("should redirect to passkey when user has only passkey method and it's allowed", async () => {
@@ -647,6 +673,7 @@ describe("sendLoginname", () => {
       expect(mockGetActiveIdentityProviders).toHaveBeenCalledWith({
         serviceConfig: { baseUrl: "https://api.example.com" },
         orgId: "discovered-org-789",
+        country: "US",
       });
     });
 
@@ -790,6 +817,7 @@ describe("sendLoginname", () => {
       expect(mockGetActiveIdentityProviders).toHaveBeenCalledWith({
         serviceConfig: { baseUrl: "https://api.example.com" },
         orgId: "discovered-org-456",
+        country: "US",
       });
     });
 

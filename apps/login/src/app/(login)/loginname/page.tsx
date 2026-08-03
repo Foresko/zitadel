@@ -3,6 +3,7 @@ import { SignInWithIdp } from "@/components/sign-in-with-idp";
 import { Translated } from "@/components/translated";
 import { UsernameForm } from "@/components/username-form";
 import { getGenericIdpLogos } from "@/lib/server/idp-logos";
+import { getCountryCode } from "@/lib/server/country";
 import { getServiceConfig } from "@/lib/service-url";
 import { getActiveIdentityProviders, getBrandingSettings, getDefaultOrg, getLoginSettings } from "@/lib/zitadel";
 import { Organization } from "@zitadel/proto/zitadel/org/v2/org_pb";
@@ -26,6 +27,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
 
   const _headers = await headers();
   const { serviceConfig } = getServiceConfig(_headers);
+  const country = getCountryCode(_headers);
 
   let defaultOrganization;
   if (!organization) {
@@ -37,11 +39,10 @@ export default async function Page(props: { searchParams: Promise<Record<string 
 
   const loginSettings = await getLoginSettings({ serviceConfig, organization: organization ?? defaultOrganization });
 
-  const identityProviders = await getActiveIdentityProviders({
+  const { identityProviders } = await getActiveIdentityProviders({
     serviceConfig,
     orgId: organization ?? defaultOrganization,
-  }).then((resp) => {
-    return resp.identityProviders;
+    country,
   });
   const genericIdentityProviderLogos =
     loginSettings?.allowExternalIdp && identityProviders.length ? getGenericIdpLogos(identityProviders) : {};

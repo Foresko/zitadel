@@ -29,6 +29,7 @@ import { SecuritySettings } from "@zitadel/proto/zitadel/settings/v2/security_se
 import escapeHtml from "escape-html";
 import { NextRequest, NextResponse } from "next/server";
 import { buildCSP } from "../csp";
+import { getCountryCode } from "./country";
 
 const logger = createLogger("flow-initiation");
 
@@ -178,9 +179,12 @@ export async function handleOIDCFlowInitiation(params: FlowInitiationParams): Pr
       const matched = IDP_SCOPE_REGEX.exec(idpScope);
       idpId = matched?.[1] ?? "";
 
+      const country = getCountryCode(request.headers);
+
       const identityProviders = await getActiveIdentityProviders({
         serviceConfig,
         orgId: organization ? organization : undefined,
+        country,
       }).then((resp) => {
         return resp.identityProviders;
       });
@@ -188,7 +192,7 @@ export async function handleOIDCFlowInitiation(params: FlowInitiationParams): Pr
       const idp = identityProviders.find((idp) => idp.id === idpId);
 
       if (idp) {
-        const identityProviderType = identityProviders[0].type;
+        const identityProviderType = idp.type;
 
         if (identityProviderType === IdentityProviderType.LDAP) {
           const ldapUrl = constructUrl(request, "/ldap");
