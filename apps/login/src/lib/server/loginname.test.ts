@@ -265,7 +265,7 @@ describe("sendLoginname", () => {
         expect((result as any).redirect).toContain("requestId=req123");
       });
 
-      test("should attempt IDP redirect when password is not allowed but user has IDP links", async () => {
+      test("should return error when password is not allowed but user has IDP links", async () => {
         mockGetLoginSettings.mockResolvedValue({ allowLocalAuthentication: false });
         mockListAuthenticationMethodTypes.mockResolvedValue({
           authMethodTypes: [AuthenticationMethodType.PASSWORD],
@@ -279,15 +279,11 @@ describe("sendLoginname", () => {
           loginName: "user@example.com",
         });
 
-        expect(result).toEqual({ redirect: "https://idp.example.com/auth" });
-        expect(mockListIDPLinks).toHaveBeenCalledWith({
-          serviceConfig: { baseUrl: "https://api.example.com" },
-          userId: "user123",
+        expect(result).toEqual({
+          error: "errors.localAuthenticationNotAllowed",
         });
-        expect(mockGetIDPByID).toHaveBeenCalledWith({
-          serviceConfig: { baseUrl: "https://api.example.com" },
-          id: "idp123",
-        });
+        expect(mockListIDPLinks).not.toHaveBeenCalled();
+        expect(mockStartIdentityProviderFlow).not.toHaveBeenCalled();
       });
 
       test("should return error when password not allowed and no IDP links available", async () => {
@@ -307,7 +303,7 @@ describe("sendLoginname", () => {
         });
       });
 
-      test("should redirect to organization IDP when password not allowed, no user IDP links, but organization has active IDP", async () => {
+      test("should return error when password not allowed, no user IDP links, but organization has active IDP", async () => {
         mockGetLoginSettings.mockResolvedValue({ allowLocalAuthentication: false });
         mockListAuthenticationMethodTypes.mockResolvedValue({
           authMethodTypes: [AuthenticationMethodType.PASSWORD],
@@ -323,12 +319,9 @@ describe("sendLoginname", () => {
           loginName: "user@example.com",
         });
 
-        expect(result).toEqual({ redirect: "https://org-idp.example.com/auth" });
-        expect(mockGetActiveIdentityProviders).toHaveBeenCalledWith({
-          serviceConfig: { baseUrl: "https://api.example.com" },
-          orgId: "org123", // User's organization from resourceOwner
-          country: "US",
-        });
+        expect(result).toEqual({ error: "errors.localAuthenticationNotAllowed" });
+        expect(mockGetActiveIdentityProviders).not.toHaveBeenCalled();
+        expect(mockStartIdentityProviderFlow).not.toHaveBeenCalled();
       });
 
       test("does not auto-redirect a disallowed organization IDP", async () => {
@@ -362,7 +355,7 @@ describe("sendLoginname", () => {
         expect((result as any).redirect).toContain("requestId=req123");
       });
 
-      test("should return error when passkeys are not allowed", async () => {
+      test("should redirect to password when passkeys are not allowed", async () => {
         mockGetLoginSettings.mockResolvedValue({ passkeysType: PasskeysType.NOT_ALLOWED, allowLocalAuthentication: true });
         mockListAuthenticationMethodTypes.mockResolvedValue({
           authMethodTypes: [AuthenticationMethodType.PASSKEY],
@@ -372,9 +365,7 @@ describe("sendLoginname", () => {
           loginName: "user@example.com",
         });
 
-        expect(result).toEqual({
-          error: "errors.passkeysNotAllowed",
-        });
+        expect(result?.redirect).toMatch(/^\/password\?/);
       });
 
       test("should return error when passkeys are allowed but allowLocalAuthentication is false", async () => {
@@ -390,12 +381,10 @@ describe("sendLoginname", () => {
           loginName: "user@example.com",
         });
 
-        expect(result).toEqual({
-          error: "errors.passkeysNotAllowed",
-        });
+        expect(result).toEqual({ error: "errors.localAuthenticationNotAllowed" });
       });
 
-      test("should redirect to IDP when user has only IDP method", async () => {
+      test("should redirect to password when user has only IDP method", async () => {
         mockListAuthenticationMethodTypes.mockResolvedValue({
           authMethodTypes: [AuthenticationMethodType.IDP],
         });
@@ -408,7 +397,9 @@ describe("sendLoginname", () => {
           loginName: "user@example.com",
         });
 
-        expect(result).toEqual({ redirect: "https://idp.example.com/auth" });
+        expect(result?.redirect).toMatch(/^\/password\?/);
+        expect(mockListIDPLinks).not.toHaveBeenCalled();
+        expect(mockStartIdentityProviderFlow).not.toHaveBeenCalled();
       });
 
       test("should NOT create session when ignoreUnknownUsernames is true", async () => {
@@ -463,7 +454,7 @@ describe("sendLoginname", () => {
         });
       });
 
-      test("should redirect to IDP when no passkey but IDP available", async () => {
+      test("should redirect to password when password and IDP are available", async () => {
         mockListAuthenticationMethodTypes.mockResolvedValue({
           authMethodTypes: [AuthenticationMethodType.PASSWORD, AuthenticationMethodType.IDP],
         });
@@ -476,7 +467,9 @@ describe("sendLoginname", () => {
           loginName: "user@example.com",
         });
 
-        expect(result).toEqual({ redirect: "https://idp.example.com/auth" });
+        expect(result).toHaveProperty("redirect");
+        expect((result as any).redirect).toMatch(/^\/password\?/);
+        expect((result as any).redirect).toContain("loginName=user%40example.com");
       });
 
       test("should redirect to password when no passkey or IDP, only password available and allowed", async () => {

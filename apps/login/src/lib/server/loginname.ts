@@ -353,10 +353,10 @@ export async function sendLoginname(command: SendLoginnameCommand) {
 
       const codeSent = shouldSend
         ? await trySendVerification({
-          userId: session?.factors?.user?.id ?? user.userId,
-          isInvite: true,
-          requestId: command.requestId,
-        })
+            userId: session?.factors?.user?.id ?? user.userId,
+            isInvite: true,
+            requestId: command.requestId,
+          })
         : false;
 
       const params = new URLSearchParams({
@@ -379,143 +379,58 @@ export async function sendLoginname(command: SendLoginnameCommand) {
       return { redirect: `/verify?` + params };
     }
 
-    if (methods.authMethodTypes.length == 1) {
-      const method = methods.authMethodTypes[0];
-      switch (method) {
-        case AuthenticationMethodType.PASSWORD: // user has only password as auth method
-          if (!userLoginSettings?.allowLocalAuthentication) {
-            // Check if user has IDPs available as alternative, that could eventually be used to register/link.
-            const idpResp = await redirectUserToIDP(userId, organization);
-            if (idpResp?.redirect) {
-              return idpResp;
-            }
+    // prefer passkey in favor of other methods
+    if (
+      methods.authMethodTypes.includes(AuthenticationMethodType.PASSKEY) &&
+      userLoginSettings?.passkeysType !== PasskeysType.NOT_ALLOWED &&
+      userLoginSettings?.allowLocalAuthentication
+    ) {
+      const passkeyParams = new URLSearchParams({
+        loginName: command.ignoreUnknownUsernames
+          ? command.loginName
+          : (session?.factors?.user?.loginName ?? user.preferredLoginName),
+        altPassword: `${methods.authMethodTypes.includes(AuthenticationMethodType.PASSWORD) && userLoginSettings?.allowLocalAuthentication}`, // show alternative password option only if allowed
+      });
 
-            if (command.ignoreUnknownUsernames) {
-              return preventUserEnumeration(command.organization);
-            }
-
-            return {
-              error: t("errors.localAuthenticationNotAllowed"),
-            };
-          }
-
-          {
-            const paramsPassword = new URLSearchParams({
-              loginName: command.ignoreUnknownUsernames
-                ? command.loginName
-                : (session?.factors?.user?.loginName ?? user.preferredLoginName),
-            });
-
-            if (organization) {
-              paramsPassword.append("organization", organization);
-            }
-
-            if (command.requestId) {
-              paramsPassword.append("requestId", command.requestId);
-            }
-
-            return {
-              redirect: "/password?" + paramsPassword,
-            };
-          }
-
-        case AuthenticationMethodType.PASSKEY: // AuthenticationMethodType.AUTHENTICATION_METHOD_TYPE_PASSKEY
-          if (userLoginSettings?.passkeysType === PasskeysType.NOT_ALLOWED || !userLoginSettings?.allowLocalAuthentication) {
-            if (command.ignoreUnknownUsernames) {
-              return preventUserEnumeration(command.organization);
-            }
-            return {
-              error: t("errors.passkeysNotAllowed"),
-            };
-          }
-
-          {
-            const paramsPasskey = new URLSearchParams({
-              loginName: command.ignoreUnknownUsernames
-                ? command.loginName
-                : (session?.factors?.user?.loginName ?? user.preferredLoginName),
-            });
-            if (command.requestId) {
-              paramsPasskey.append("requestId", command.requestId);
-            }
-
-            if (organization) {
-              paramsPasskey.append("organization", organization);
-            }
-
-            return { redirect: "/passkey?" + paramsPasskey };
-          }
-
-        case AuthenticationMethodType.IDP: {
-          const resp = await redirectUserToIDP(userId, organization);
-
-          if (resp) {
-            return resp;
-          }
-        }
+      if (command.requestId) {
+        passkeyParams.append("requestId", command.requestId);
       }
-    } else {
-      // prefer passkey in favor of other methods
-      if (
-        methods.authMethodTypes.includes(AuthenticationMethodType.PASSKEY) &&
-        userLoginSettings?.passkeysType !== PasskeysType.NOT_ALLOWED &&
-        userLoginSettings?.allowLocalAuthentication
-      ) {
-        const passkeyParams = new URLSearchParams({
-          loginName: command.ignoreUnknownUsernames
-            ? command.loginName
-            : (session?.factors?.user?.loginName ?? user.preferredLoginName),
-          altPassword: `${methods.authMethodTypes.includes(AuthenticationMethodType.PASSWORD) && userLoginSettings?.allowLocalAuthentication}`, // show alternative password option only if allowed
-        });
 
-        if (command.requestId) {
-          passkeyParams.append("requestId", command.requestId);
-        }
-
-        if (organization) {
-          passkeyParams.append("organization", organization);
-        }
-
-        return { redirect: "/passkey?" + passkeyParams };
+      if (organization) {
+        passkeyParams.append("organization", organization);
       }
-      if (methods.authMethodTypes.includes(AuthenticationMethodType.IDP)) {
-        const idpResp = await redirectUserToIDP(userId, organization);
 
-        if (idpResp) {
-          return idpResp;
-        }
-      }
-      if (methods.authMethodTypes.includes(AuthenticationMethodType.PASSWORD)) {
-        // Check if password authentication is allowed
-        if (!userLoginSettings?.allowLocalAuthentication) {
-          if (command.ignoreUnknownUsernames) {
-            return preventUserEnumeration(command.organization);
-          }
-          return {
-            error: t("errors.localAuthenticationNotAllowed"),
-          };
-        }
-
-        // user has no passkey setup and login settings allow passwords
-        const paramsPasswordDefault = new URLSearchParams({
-          loginName: command.ignoreUnknownUsernames
-            ? command.loginName
-            : (session?.factors?.user?.loginName ?? user.preferredLoginName),
-        });
-
-        if (command.requestId) {
-          paramsPasswordDefault.append("requestId", command.requestId);
-        }
-
-        if (organization) {
-          paramsPasswordDefault.append("organization", organization);
-        }
-
-        return {
-          redirect: "/password?" + paramsPasswordDefault,
-        };
-      }
+      return { redirect: "/passkey?" + passkeyParams };
     }
+
+    // Check if password authentication is allowed
+    if (!userLoginSettings?.allowLocalAuthentication) {
+      if (command.ignoreUnknownUsernames) {
+        return preventUserEnumeration(command.organization);
+      }
+      return {
+        error: t("errors.localAuthenticationNotAllowed"),
+      };
+    }
+
+    // user has no passkey setup and login settings allow passwords
+    const paramsPasswordDefault = new URLSearchParams({
+      loginName: command.ignoreUnknownUsernames
+        ? command.loginName
+        : (session?.factors?.user?.loginName ?? user.preferredLoginName),
+    });
+
+    if (command.requestId) {
+      paramsPasswordDefault.append("requestId", command.requestId);
+    }
+
+    if (organization) {
+      paramsPasswordDefault.append("organization", organization);
+    }
+
+    return {
+      redirect: "/password?" + paramsPasswordDefault,
+    };
   }
 
   logger.debug("User not found (0 potential users), checking registration options");
