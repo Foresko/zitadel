@@ -1,4 +1,5 @@
 import { DynamicTheme } from "@/components/dynamic-theme";
+import { GoogleAppleIdRecoveryNotice } from "@/components/google-apple-id-recovery-notice";
 import { SignInWithIdp } from "@/components/sign-in-with-idp";
 import { Translated } from "@/components/translated";
 import { UsernameForm } from "@/components/username-form";
@@ -85,6 +86,12 @@ export default async function Page(props: { searchParams: Promise<Record<string 
               postErrorRedirectUrl="/loginname"
               showLabel={loginSettings?.allowLocalAuthentication}
             ></SignInWithIdp>
+          </div>
+        )}
+
+        {country === "RU" && (
+          <div className="w-full pt-2 pb-4">
+            <GoogleAppleIdRecoveryNotice />
           </div>
         )}
       </div>
