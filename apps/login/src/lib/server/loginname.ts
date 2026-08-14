@@ -38,7 +38,6 @@ export type SendLoginnameCommand = {
   organization?: string;
   defaultOrganization?: string;
   suffix?: string;
-  ignoreUnknownUsernames?: boolean;
 };
 
 const ORG_SUFFIX_REGEX = /(?<=@)(.+)/;
@@ -56,6 +55,13 @@ export async function sendLoginname(command: SendLoginnameCommand) {
   if (!loginSettingsByContext) {
     return { error: t("errors.couldNotGetLoginSettings") };
   }
+
+  // Single source of truth for enumeration protection, derived server-side from the
+  // request-context login settings (sendLoginname is a public server action, so a
+  // client-supplied flag must not be trusted). It gates session creation and the
+  // loginName exposed in redirect URLs, keeping known and unknown users
+  // indistinguishable while protection applies.
+  const ignoreUnknownUsernames = !!loginSettingsByContext.ignoreUnknownUsernames;
 
   let searchUsersRequest: SearchUsersCommand = {
     serviceConfig,
@@ -93,7 +99,7 @@ export async function sendLoginname(command: SendLoginnameCommand) {
   }
 
   const preventUserEnumeration = (organization: string | undefined) => {
-    if (command.ignoreUnknownUsernames) {
+    if (ignoreUnknownUsernames) {
       logger.debug("ignoreUnknownUsernames is true, redirecting to password");
       const paramsPasswordDefault = new URLSearchParams({
         loginName: command.loginName,
@@ -241,7 +247,7 @@ export async function sendLoginname(command: SendLoginnameCommand) {
 
   if (users.length > 1) {
     logger.debug("multiple users found, returning error");
-    if (loginSettingsByContext?.ignoreUnknownUsernames) {
+    if (ignoreUnknownUsernames) {
       return preventUserEnumeration(command.organization);
     }
     return { error: t("errors.moreThanOneUserFound") };
@@ -271,8 +277,11 @@ export async function sendLoginname(command: SendLoginnameCommand) {
       }
     }
 
+    // Only create a session (and its cookie) when enumeration protection does not
+    // apply: with protection on, known and unknown users must be indistinguishable,
+    // and the /password page must not be able to tell the difference either.
     let session;
-    if (!userLoginSettings?.ignoreUnknownUsernames) {
+    if (!ignoreUnknownUsernames) {
       const checks = create(ChecksSchema, {
         user: { search: { case: "userId", value: userId } },
       });
@@ -298,9 +307,17 @@ export async function sendLoginname(command: SendLoginnameCommand) {
       return { error: t("errors.couldNotCreateSession") };
     }
 
+    // LoginName to expose in redirect URLs: while enumeration protection applies,
+    // echo the raw input so known and unknown users stay indistinguishable; otherwise
+    // use the session's loginName so the next page can match the session cookie
+    // (falling back to the user's preferred login name).
+    const redirectLoginName = ignoreUnknownUsernames
+      ? command.loginName
+      : (session?.factors?.user?.loginName ?? user.preferredLoginName);
+
     // TODO: check if handling of userstate INITIAL is needed
     if (user.state === UserState.INITIAL) {
-      if (userLoginSettings?.ignoreUnknownUsernames) {
+      if (ignoreUnknownUsernames) {
         return preventUserEnumeration(command.organization);
       }
       return { error: t("errors.initialUserNotSupported") };
@@ -309,7 +326,7 @@ export async function sendLoginname(command: SendLoginnameCommand) {
     // Resolve organization from command or session
     let organization = command.organization ?? session?.factors?.user?.organizationId ?? user.details?.resourceOwner;
 
-    if (userLoginSettings?.ignoreUnknownUsernames) {
+    if (ignoreUnknownUsernames) {
       organization = command.organization;
       if (!organization && ORG_SUFFIX_REGEX.test(command.loginName)) {
         const matched = ORG_SUFFIX_REGEX.exec(command.loginName);
@@ -353,10 +370,10 @@ export async function sendLoginname(command: SendLoginnameCommand) {
 
       const codeSent = shouldSend
         ? await trySendVerification({
-            userId: session?.factors?.user?.id ?? user.userId,
-            isInvite: true,
-            requestId: command.requestId,
-          })
+          userId: session?.factors?.user?.id ?? user.userId,
+          isInvite: true,
+          requestId: command.requestId,
+        })
         : false;
 
       const params = new URLSearchParams({
@@ -386,9 +403,7 @@ export async function sendLoginname(command: SendLoginnameCommand) {
       userLoginSettings?.allowLocalAuthentication
     ) {
       const passkeyParams = new URLSearchParams({
-        loginName: command.ignoreUnknownUsernames
-          ? command.loginName
-          : (session?.factors?.user?.loginName ?? user.preferredLoginName),
+        loginName: redirectLoginName,
         altPassword: `${methods.authMethodTypes.includes(AuthenticationMethodType.PASSWORD) && userLoginSettings?.allowLocalAuthentication}`, // show alternative password option only if allowed
       });
 
@@ -405,7 +420,7 @@ export async function sendLoginname(command: SendLoginnameCommand) {
 
     // Check if password authentication is allowed
     if (!userLoginSettings?.allowLocalAuthentication) {
-      if (command.ignoreUnknownUsernames) {
+      if (ignoreUnknownUsernames) {
         return preventUserEnumeration(command.organization);
       }
       return {
@@ -415,9 +430,7 @@ export async function sendLoginname(command: SendLoginnameCommand) {
 
     // user has no passkey setup and login settings allow passwords
     const paramsPasswordDefault = new URLSearchParams({
-      loginName: command.ignoreUnknownUsernames
-        ? command.loginName
-        : (session?.factors?.user?.loginName ?? user.preferredLoginName),
+      loginName: redirectLoginName,
     });
 
     if (command.requestId) {
@@ -470,6 +483,7 @@ export async function sendLoginname(command: SendLoginnameCommand) {
       logger.debug("No single org found for discovery");
     }
   }
+
   // When a user is not found, try to redirect to an external IdP if:
   // - local authentication is disabled, OR
   // - domain discovery resolved an organization (regardless of allowRegister)
@@ -478,7 +492,7 @@ export async function sendLoginname(command: SendLoginnameCommand) {
   // Fixes: https://github.com/zitadel/zitadel/issues/12021
   // Fixes: https://github.com/zitadel/zitadel/issues/12023
 
-  if ((!effectiveLoginSettings?.allowLocalAuthentication || discoveredOrganization) && !command.ignoreUnknownUsernames) {
+  if ((!effectiveLoginSettings?.allowLocalAuthentication || discoveredOrganization) && !ignoreUnknownUsernames) {
     const resp = await redirectUserToIDP(undefined, discoveredOrganization);
     if (resp) {
       logger.debug("Redirecting to IDP", { organization: discoveredOrganization });

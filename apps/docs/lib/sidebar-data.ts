@@ -269,6 +269,7 @@ export const guidesSidebar: readonly SidebarItem[] = [
           "apis/openidoauth/grant-types",
           "apis/openidoauth/authrequest",
           "guides/integrate/login/oidc/webkeys",
+          "guides/integrate/login/oidc/native-app-links",
           "guides/integrate/token-exchange",
         ],
       },
@@ -814,6 +815,7 @@ export const guidesSidebar: readonly SidebarItem[] = [
           "self-hosting/manage/upgrade-v3-to-v4",
           "self-hosting/manage/database/database",
           "self-hosting/manage/cache",
+          "self-hosting/manage/tuning",
         ],
       },
 
