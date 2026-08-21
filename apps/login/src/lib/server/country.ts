@@ -28,7 +28,7 @@ export function getCountryCode(requestHeaders: Pick<Headers, "get">): string | u
 
 function loadIpLocationApi(): Promise<IpLocationApi> {
   process.env.ILA_SKIP_INITIAL_RELOAD = "true";
-  apiPromise ??= import("ip-location-api").then((api) => ({
+  apiPromise ??= import("ip-location-api/pack").then((api) => ({
     lookup: api.lookup as CountryLookup,
     reload: async (settings) => {
       await api.reload(settings);

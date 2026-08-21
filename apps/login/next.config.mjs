@@ -41,7 +41,6 @@ const nextConfig = {
   // incompatibilities. Keep this list in sync with package.json dependencies
   // when adding new OpenTelemetry or logging packages.
   serverExternalPackages: [
-    'ip-location-api',
     'winston',
     '@opentelemetry/api',
     '@opentelemetry/api-logs',
@@ -58,12 +57,6 @@ const nextConfig = {
     '@opentelemetry/resource-detector-container',
     '@opentelemetry/resource-detector-gcp',
   ],
-  outputFileTracingIncludes: {
-    "/*": [
-      "./node_modules/ip-location-api/script/**/*",
-      "../../node_modules/.pnpm/ip-location-api@5.0.2/node_modules/ip-location-api/script/**/*",
-    ],
-  },
   // Improve SSR stability - not actually needed for React 19 SSR issues
   // onDemandEntries: {
   //   maxInactiveAge: 25 * 1000,

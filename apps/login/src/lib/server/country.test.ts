@@ -5,7 +5,7 @@ const ipLocation = vi.hoisted(() => ({
   reload: vi.fn(),
 }));
 
-vi.mock("ip-location-api", () => ipLocation);
+vi.mock("ip-location-api/pack", () => ipLocation);
 
 vi.mock("../logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
