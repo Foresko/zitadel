@@ -13,7 +13,6 @@ export type CountryLookup = (ip: string) => CountryLookupResult | Promise<Countr
 
 interface IpLocationApi {
   lookup: CountryLookup;
-  reload(settings: Record<string, unknown>): Promise<void>;
 }
 
 let lookupCountry: CountryLookup | undefined;
@@ -27,27 +26,10 @@ export function getCountryCode(requestHeaders: Pick<Headers, "get">): string | u
 }
 
 function loadIpLocationApi(): Promise<IpLocationApi> {
-  process.env.ILA_SKIP_INITIAL_RELOAD = "true";
   apiPromise ??= import("ip-location-api/pack").then((api) => ({
     lookup: api.lookup as CountryLookup,
-    reload: async (settings) => {
-      await api.reload(settings);
-    },
   }));
   return apiPromise;
-}
-
-function countryDatabaseSettings(): Record<string, unknown> {
-  return {
-    fields: "country",
-    ipLocationDb: "user",
-    dataDir: process.env.ILA_DATA_DIR ?? "/var/lib/zitadel-login/ip-location",
-    tmpDataDir: process.env.ILA_TMP_DATA_DIR ?? "/var/lib/zitadel-login/ip-location-tmp",
-    autoUpdate: process.env.ILA_AUTO_UPDATE ?? "0 3 * * *",
-    smallMemory: false,
-    silent: true,
-    skipInitialReload: true,
-  };
 }
 
 function scheduleRetry(): void {
@@ -64,7 +46,6 @@ function scheduleRetry(): void {
 async function loadCountryDatabase(): Promise<void> {
   try {
     const api = await loadIpLocationApi();
-    await api.reload(countryDatabaseSettings());
     lookupCountry = api.lookup;
     logger.info("IP country database initialized");
   } catch (error) {

@@ -145,6 +145,7 @@ services:
       retries: 12
       start_period: 20s
     volumes:
+      - zitadel-login-ip-location:/var/lib/zitadel-login/ip-location
       - zitadel-bootstrap:/zitadel/bootstrap:ro
     networks:
       - zitadel
@@ -233,4 +234,5 @@ networks:
 
 volumes:
   postgres-data:
+  zitadel-login-ip-location:
   zitadel-bootstrap:

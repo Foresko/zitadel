@@ -3,7 +3,9 @@ USER root
 RUN update-crypto-policies --set FIPS
 WORKDIR /app
 # If /.env-file/.env is mounted into the container, its variables are made available to the server before it starts up.
-RUN mkdir -p /.env-file && touch /.env-file/.env && chown -R 1001:0 /.env-file
+RUN mkdir -p /.env-file /var/lib/zitadel-login/ip-location /var/lib/zitadel-login/ip-location-tmp && \
+    touch /.env-file/.env && \
+    chown -R 1001:0 /.env-file /var/lib/zitadel-login
 
 COPY --chown=1001:0 .next/standalone ./
 
@@ -15,6 +17,13 @@ ENV HOSTNAME="::" \
     SSL_CERT_FILE="/etc/pki/tls/certs/ca-bundle.crt" \
     ZITADEL_TLS_ENABLED="false" \
     ZITADEL_FIPS_REQUIRED="true" \
+    ILA_FIELDS="country" \
+    ILA_IP_LOCATION_DB="user" \
+    ILA_DATA_DIR="/var/lib/zitadel-login/ip-location" \
+    ILA_TMP_DATA_DIR="/var/lib/zitadel-login/ip-location-tmp" \
+    ILA_AUTO_UPDATE="0 3 * * *" \
+    ILA_SMALL_MEMORY="false" \
+    ILA_SILENT="true" \
     OTEL_SERVICE_NAME="zitadel-login" \
     OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
 

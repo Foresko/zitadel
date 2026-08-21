@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const ipLocation = vi.hoisted(() => ({
   lookup: vi.fn(),
-  reload: vi.fn(),
 }));
 
 vi.mock("ip-location-api/pack", () => ipLocation);
@@ -84,50 +83,18 @@ describe("country database lifecycle", () => {
     vi.resetModules();
     vi.useFakeTimers();
     ipLocation.lookup.mockReset();
-    ipLocation.reload.mockReset();
-    process.env.ILA_DATA_DIR = "/tmp/country-data";
-    process.env.ILA_TMP_DATA_DIR = "/tmp/country-tmp";
-    process.env.ILA_AUTO_UPDATE = "0 3 * * *";
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    delete process.env.ILA_DATA_DIR;
-    delete process.env.ILA_TMP_DATA_DIR;
-    delete process.env.ILA_AUTO_UPDATE;
-    delete process.env.ILA_SKIP_INITIAL_RELOAD;
   });
 
   test("loads user-country into memory before enabling lookup", async () => {
-    ipLocation.reload.mockResolvedValue(undefined);
     ipLocation.lookup.mockReturnValue({ country: "RU" });
     const { resolveCountry } = await import("./country");
 
     await expect(resolveCountry("203.0.113.42")).resolves.toBe("RU");
 
-    expect(process.env.ILA_SKIP_INITIAL_RELOAD).toBe("true");
-    expect(ipLocation.reload).toHaveBeenCalledWith({
-      fields: "country",
-      ipLocationDb: "user",
-      dataDir: "/tmp/country-data",
-      tmpDataDir: "/tmp/country-tmp",
-      autoUpdate: "0 3 * * *",
-      smallMemory: false,
-      silent: true,
-      skipInitialReload: true,
-    });
-  });
-
-  test("fails open and retries outside the request after initial reload failure", async () => {
-    ipLocation.reload.mockRejectedValueOnce(new Error("download failed")).mockResolvedValueOnce(undefined);
-    ipLocation.lookup.mockReturnValue({ country: "RU" });
-    const { resolveCountry } = await import("./country");
-
-    await expect(resolveCountry("203.0.113.42")).resolves.toBeUndefined();
-
-    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
-
-    expect(ipLocation.reload).toHaveBeenCalledTimes(2);
-    await expect(resolveCountry("203.0.113.42")).resolves.toBe("RU");
+    expect(ipLocation.lookup).toHaveBeenCalledWith("203.0.113.42");
   });
 });
