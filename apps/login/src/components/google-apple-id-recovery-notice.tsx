@@ -15,7 +15,7 @@ export function GoogleAppleIdRecoveryNotice() {
           </span>
           <span className="flex gap-2">
             <span className="font-semibold tabular-nums opacity-70">2.</span>
-            На следующем шаге нажмите «Забыли пароль».
+            На следующем шаге нажмите «Сбросить пароль».
           </span>
           <span className="flex gap-2">
             <span className="font-semibold tabular-nums opacity-70">3.</span>
