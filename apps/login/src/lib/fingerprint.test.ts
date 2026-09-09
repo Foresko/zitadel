@@ -326,6 +326,90 @@ describe("fingerprint", () => {
       );
     });
 
+    it("should use the originating IP from an x-forwarded-for proxy chain", async () => {
+      const mockGet = vi.fn().mockReturnValue({
+        value: "test-id",
+      });
+      vi.mocked(cookies).mockResolvedValue({ get: mockGet, set: vi.fn() } as any);
+
+      const mockHeaders = new Map([["x-forwarded-for", "203.0.113.1, 10.0.0.5"]]);
+      vi.mocked(headers).mockResolvedValue({
+        get: (key: string) => mockHeaders.get(key) ?? null,
+      } as any);
+
+      vi.mocked(userAgent).mockReturnValue({
+        device: {},
+        engine: {},
+        os: {},
+        browser: {},
+      } as any);
+
+      await getUserAgent();
+
+      expect(create).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          ip: "203.0.113.1",
+        }),
+      );
+    });
+
+    it("should use the originating IPv6 address from an x-forwarded-for proxy chain", async () => {
+      const mockGet = vi.fn().mockReturnValue({
+        value: "test-id",
+      });
+      vi.mocked(cookies).mockResolvedValue({ get: mockGet, set: vi.fn() } as any);
+
+      const mockHeaders = new Map([["x-forwarded-for", "2001:db8::1, 10.0.0.5"]]);
+      vi.mocked(headers).mockResolvedValue({
+        get: (key: string) => mockHeaders.get(key) ?? null,
+      } as any);
+
+      vi.mocked(userAgent).mockReturnValue({
+        device: {},
+        engine: {},
+        os: {},
+        browser: {},
+      } as any);
+
+      await getUserAgent();
+
+      expect(create).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          ip: "2001:db8::1",
+        }),
+      );
+    });
+
+    it("should not send an invalid x-forwarded-for value as an IP address", async () => {
+      const mockGet = vi.fn().mockReturnValue({
+        value: "test-id",
+      });
+      vi.mocked(cookies).mockResolvedValue({ get: mockGet, set: vi.fn() } as any);
+
+      const mockHeaders = new Map([["x-forwarded-for", "not-an-ip, 10.0.0.5"]]);
+      vi.mocked(headers).mockResolvedValue({
+        get: (key: string) => mockHeaders.get(key) ?? null,
+      } as any);
+
+      vi.mocked(userAgent).mockReturnValue({
+        device: {},
+        engine: {},
+        os: {},
+        browser: {},
+      } as any);
+
+      await getUserAgent();
+
+      expect(create).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          ip: "",
+        }),
+      );
+    });
+
     it("should fallback to remoteAddress if x-forwarded-for is not available", async () => {
       const mockGet = vi.fn().mockReturnValue({
         value: "test-id",

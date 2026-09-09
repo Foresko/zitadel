@@ -1,5 +1,7 @@
 import { create } from "@zitadel/client";
 import { UserAgent, UserAgentSchema } from "@zitadel/proto/zitadel/session/v2/session_pb";
+import { isIP } from "node:net";
+import { ReadonlyHeaders } from "next/dist/server/web/spec-extension/adapters/headers";
 import { cookies, headers } from "next/headers";
 import { userAgent } from "next/server";
 import { v4 as uuidv4 } from "uuid";
@@ -36,10 +38,23 @@ export async function getOrSetFingerprintId(): Promise<string> {
   return fingerprintId;
 }
 
+function getClientIP(requestHeaders: ReadonlyHeaders): string {
+  const forwardedFor = requestHeaders.get("x-forwarded-for");
+
+  if (forwardedFor !== null) {
+    const clientIP = forwardedFor?.split(",", 1)[0]?.trim() ?? "";
+    return isIP(clientIP) ? clientIP : "";
+  }
+
+  const remoteAddress = requestHeaders.get("remoteAddress") ?? "";
+  return isIP(remoteAddress) ? remoteAddress : "";
+}
+
 export async function getUserAgent(): Promise<UserAgent> {
   const _headers = await headers();
 
   const fingerprintId = await getOrSetFingerprintId();
+  const ip = getClientIP(_headers);
 
   const { device, engine, os, browser } = userAgent({ headers: _headers });
 
@@ -53,7 +68,7 @@ export async function getUserAgent(): Promise<UserAgent> {
   const browserDescription = `${browser?.name ? `${browser.name},` : ""} ${browser.version ? `${browser.version},` : ""} `;
 
   const userAgentData: UserAgent = create(UserAgentSchema, {
-    ip: _headers.get("x-forwarded-for") ?? _headers.get("remoteAddress") ?? "",
+    ip,
     header: { "user-agent": { values: userAgentHeaderValues } },
     description: `${browserDescription}, ${deviceDescription}, ${engineDescription}, ${osDescription}`,
     fingerprintId: fingerprintId,
