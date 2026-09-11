@@ -3,8 +3,9 @@ import { GoogleAppleIdRecoveryNotice } from "@/components/google-apple-id-recove
 import { SignInWithIdp } from "@/components/sign-in-with-idp";
 import { Translated } from "@/components/translated";
 import { UsernameForm } from "@/components/username-form";
-import { getGenericIdpLogos } from "@/lib/server/idp-logos";
 import { getCountryCode } from "@/lib/server/country";
+import { getGenericIdpLogos } from "@/lib/server/idp-logos";
+import { getIdpPolicy } from "@/lib/server/idp-policy";
 import { getServiceConfig } from "@/lib/service-url";
 import { getActiveIdentityProviders, getBrandingSettings, getDefaultOrg, getLoginSettings } from "@/lib/zitadel";
 import { Organization } from "@zitadel/proto/zitadel/org/v2/org_pb";
@@ -29,6 +30,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
   const _headers = await headers();
   const { serviceConfig } = getServiceConfig(_headers);
   const country = getCountryCode(_headers);
+  const idpPolicy = getIdpPolicy(country);
 
   let defaultOrganization;
   if (!organization) {
@@ -89,7 +91,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
           </div>
         )}
 
-        {country === "RU" && (
+        {country === "RU" && !!idpPolicy?.allowedIdps.length && (
           <div className="w-full pt-2 pb-4">
             <GoogleAppleIdRecoveryNotice />
           </div>
