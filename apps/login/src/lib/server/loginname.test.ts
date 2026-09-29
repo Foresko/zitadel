@@ -603,6 +603,7 @@ describe("sendLoginname", () => {
       expect(mockGetActiveIdentityProviders).toHaveBeenCalledWith({
         serviceConfig: { baseUrl: "https://api.example.com" },
         orgId: "discovered-org-sso",
+        country: "US",
       });
     });
 
